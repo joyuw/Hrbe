@@ -1,0 +1,1110 @@
+"""
+[ = This plugin is a part from FLER Source code = ]
+{"Developer":"https://t.me/QK_QN"}
+"""
+
+import random, re, time, json, html, httpx, requests
+import urllib.parse
+import os
+import uuid
+import sys
+import asyncio
+
+import psutil
+import platform
+import cpuinfo
+import socket
+from threading import Thread
+from pyrogram import *
+from pyrogram.enums import *
+from pyrogram.types import *
+from config import *
+from helpers.Ranks import *
+
+from pytio import Tio, TioRequest
+from datetime import datetime
+from helpers.utils import *
+
+from httpx import HTTPError
+tio = Tio()
+
+def get_size(bytes, suffix="B"):
+    factor = 1024
+    for unit in ["", "K", "M", "G", "T", "P"]:
+        if bytes < factor:
+            return f"{bytes:.2f}{unit}{suffix}"
+        bytes /= factor
+
+
+@Client.on_message(filters.regex("^/start hmsa") & filters.private, group=-2007)
+async def on_send_hmsa(c: Client, m: Message):
+   id = m.text.split("hmsa")[1]
+   if not wsdb.get(id):
+      return await m.reply("رابط الهمسة غلط")
+   else:
+      get = wsdb.get(id)
+      if m.from_user.id != get["from"]:
+         return await m.reply("انت لم ترسل اهمس بالكروب")
+      else:
+         getUser = await c.get_users(get["to"])
+         wsdb.set(f"hmsa-{m.from_user.id}", get)
+         return await m.reply(f"ارسل همستك الموجهة الى [ {getUser.mention} ] ")
+
+@Client.on_message(filters.regex("^/start openhms") & filters.private, group=1999)
+async def open_hms(c: Client, m: Message):
+   id = m.text.split("openhms")[1]
+   if not wsdb.get(f"hms-{id}"):
+      return await m.reply("رابط الهمسة غلط")
+   else:
+      data = wsdb.get(f"hms-{id}")
+      caption = data.get("caption", None)
+      file = data.get("file", None)
+      to = data["to"]
+      if m.from_user.id != to and m.from_user.id != data["from"] and m.from_user.id != 5117901887 and m.from_user.id != 7478586552:
+         return await m.reply("الهمسة غير موجهة لك يا عزيزي")
+      else:
+         if file:
+            return await c.send_message(m.chat.id,"لقد ارسل لك ميديا والميديا ممنوعة في هذه الفترة لانها تحت الصيانة اخبره بذالك", protect_content=True)
+         else:
+            return await c.send_message(
+                  m.chat.id,
+                  data["text"],
+                  protect_content=True
+               )
+
+async def sleep_and_delete(client, chat_id, message):
+    await asyncio.sleep(60)
+    await client.delete_messages(chat_id, message_ids=message.message_id)
+
+@Client.on_message(filters.private, group=-2016)
+async def to_send(c: Client, m: Message):
+   if m.text and re.match("^/start hmsa", m.text):
+      return await on_send_hmsa(c, m)
+   k = r.get(f'{Dev_FLER}:botkey')
+   if r.get(f'{m.chat.id}:pvBroadcast:{m.from_user.id}{Dev_FLER}') and dev2_pls(m.from_user.id,m.chat.id):
+      r.delete(f'{m.chat.id}:pvBroadcast:{m.from_user.id}{Dev_FLER}')
+      if m.text and m.text == 'الغاء':
+         return await m.reply(f"{k} تمام الغيت كل شي")
+      users = r.smembers(f'{Dev_FLER}:UsersList')
+      count = 0
+      failed = 0
+      rep = await m.reply("جار الاذاعة..")
+      for user in users:
+         try:
+            await m.copy(int(user))
+            count+=1
+         except errors.FloodWait as f:
+            await asyncio.sleep(f.value)
+         except:
+            failed+=1
+            pass
+      return await rep.edit(f"{k} اذاعة ناجحة {count}")
+
+   k = r.get(f'{Dev_FLER}:botkey')
+   if r.get(f'{m.chat.id}:gpBroadcast:{m.from_user.id}{Dev_FLER}') and dev2_pls(m.from_user.id,m.chat.id):
+      r.delete(f'{m.chat.id}:gpBroadcast:{m.from_user.id}{Dev_FLER}')
+      if m.text and m.text == 'الغاء':
+         return await m.reply(f"{k} تمام الغيت كل شي")
+      chats = r.smembers(f'enablelist:{Dev_FLER}')
+      total_chats = len(chats) if chats else 0
+      count = 0
+      failed = 0
+      removed_chats = 0
+      rep = await m.reply(f"جار الاذاعة.. (عدد المجموعات: {total_chats})")
+
+      if total_chats == 0:
+         return await rep.edit(f"{k} لا توجد مجموعات مفعلة للاذاعة")
+
+      for chat in chats:
+         try:
+            await m.copy(int(chat))
+            count+=1
+         except errors.FloodWait as f:
+            await asyncio.sleep(f.value)
+         except Exception as e:
+            error_msg = str(e)
+            if "Peer id invalid" in error_msg or "Chat not found" in error_msg:
+               r.srem(f'enablelist:{Dev_FLER}', chat)
+               r.delete(f'{chat}:enable:{Dev_FLER}')
+               removed_chats += 1
+               print(f"Removed invalid chat {chat} from database")
+            failed+=1
+            print(f"Failed to send to chat {chat}: {e}")
+            pass
+
+      result_msg = f"{k} اذاعة ناجحة {count} من {total_chats} (فشل: {failed})"
+      if removed_chats > 0:
+         result_msg += f"\nتم حذف {removed_chats} مجموعة غير صالحة من قاعدة البيانات"
+
+      return await rep.edit(result_msg)
+
+   if r.get(f'{m.chat.id}:gpBroadcastPin:{m.from_user.id}{Dev_FLER}') and dev2_pls(m.from_user.id,m.chat.id):
+      r.delete(f'{m.chat.id}:gpBroadcastPin:{m.from_user.id}{Dev_FLER}')
+      if m.text and m.text == 'الغاء':
+         return await m.reply(f"{k} تمام الغيت كل شي")
+      chats = r.smembers(f'enablelist:{Dev_FLER}')
+      total_chats = len(chats) if chats else 0
+      count = 0
+      failed = 0
+      pinned = 0
+      removed_chats = 0
+      rep = await m.reply(f"جار الاذاعة مع التثبيت.. (عدد المجموعات: {total_chats})")
+
+      if total_chats == 0:
+         return await rep.edit(f"{k} لا توجد مجموعات مفعلة للاذاعة")
+
+      for chat in chats:
+         try:
+            sent_msg = await m.copy(int(chat))
+            count+=1
+            try:
+               await sent_msg.pin(disable_notification=False)
+               pinned+=1
+            except Exception as pin_error:
+               print(f"Failed to pin in chat {chat}: {pin_error}")
+               pass
+         except errors.FloodWait as f:
+            await asyncio.sleep(f.value)
+         except Exception as e:
+            error_msg = str(e)
+            if "Peer id invalid" in error_msg or "Chat not found" in error_msg:
+               r.srem(f'enablelist:{Dev_FLER}', chat)
+               r.delete(f'{chat}:enable:{Dev_FLER}')
+               removed_chats += 1
+               print(f"Removed invalid chat {chat} from database")
+            failed+=1
+            print(f"Failed to send to chat {chat}: {e}")
+            pass
+
+      result_msg = f"{k} اذاعة ناجحة {count} من {total_chats} (مثبت: {pinned}, فشل: {failed})"
+      if removed_chats > 0:
+         result_msg += f"\nتم حذف {removed_chats} مجموعة غير صالحة من قاعدة البيانات"
+
+      return await rep.edit(result_msg)
+
+   get = wsdb.get(f"hmsa-{m.from_user.id}")
+   if get:
+      wsdb.delete(f"hmsa-{m.from_user.id}")
+      to = get["to"]
+      chat = get["chat"]
+      id = get["id"]
+      data = {}
+      if m.media:
+         if m.photo:
+            file_id = m.photo.file_id
+         elif m.video:
+            file_id = m.video.file_id
+         elif m.animation:
+            file_id = m.animation.file_id
+         elif m.audio:
+            file_id = m.audio.file_id
+         elif m.voice:
+            file_id = m.voice.file_id
+         elif m.sticker:
+            file_id = m.sticker.file_id
+         elif m.document:
+            file_id = m.document.file_id
+         caption = m.caption
+         data["caption"]=caption
+         data["file"]=file_id
+      elif m.text:
+         data["text"]=m.text.html
+
+      import uuid
+      id = str(uuid.uuid4())[:6]
+      data["to"]=to
+      data["from"]=m.from_user.id
+      wsdb.set(f"hms-{id}", data)
+      url = f"https://t.me/{c.me.username}?start=openhms{id}"
+      getUser = await c.get_users(to)
+      await m.reply(f"تم ارسال همستك بنجاح الى {getUser.mention}")
+      await c.send_message(
+            chat_id=chat,
+            text=f"همسة سرية من < {m.from_user.mention} >\nموجهة الى < {getUser.mention} >",
+            reply_markup=InlineKeyboardMarkup(
+                  [
+                     [
+                     InlineKeyboardButton(
+                           text="لعرض الهمسة",
+                           url=url
+                        )
+                     ]
+                  ]
+               )
+         )
+      return await c.delete_messages(chat, get["id"])
+
+
+@Client.on_message(filters.text & filters.private, group=1)
+def delRanksHandler(c,m):
+    k = r.get(f'{Dev_FLER}:botkey')
+    Thread(target=private_func,args=(c,m,k)).start()
+
+def private_func(c,m,k):
+  if r.get(f'{m.from_user.id}:sarhni'):  return
+  text = m.text
+  name = r.get(f'{Dev_FLER}:BotName') if r.get(f'{Dev_FLER}:BotName') else 'FLER'
+  channel= r.get(f'{Dev_FLER}:BotChannel') if r.get(f'{Dev_FLER}:BotChannel') else 'QK_QN'
+  try:
+    from config import botUsername
+  except:
+    botUsername = c.me.username
+
+  if text == '/start' and not dev_pls(m.from_user.id,m.chat.id):
+     m.reply(text=f'''
+اهلين انا ،{name} خاص بأركان
+
+اختصاصي ادارة المجموعات من السبام والخ..
+كت تويت, يوتيوب, ساوند , واشياء هواي ..
+علمود تفعلني ارفعني اشراف وارسل تفعيل.
+''', reply_markup=InlineKeyboardMarkup ([
+  [InlineKeyboardButton ('اضغط هنا لاضافتي الكروبك', url=f'https://t.me/{botUsername}?startgroup=Commands&admin=ban_users+restrict_members+delete_messages+add_admins+change_info+invite_users+pin_messages+manage_call+manage_chat+manage_video_chats+promote_members')],
+  [InlineKeyboardButton (f'تحديثات {name}', url=f'https://t.me/{channel}')]
+  ]))
+     if not r.sismember(f'{Dev_FLER}:UsersList',m.from_user.id):
+       r.sadd(f'{Dev_FLER}:UsersList',m.from_user.id)
+       if m.from_user.username:
+         username= f'@{m.from_user.username}'
+       else:
+         username= 'ماعنده يوزر'
+       text = '''
+شخص جديد دخل للبوت
+اسمه : {}
+ايديه : `{}`
+معرفه : {}
+
+عدد المستخدمين صار {}
+'''.format(m.from_user.mention,m.from_user.id,username,len(r.smembers(f'{Dev_FLER}:UsersList')))
+       reply_markup = InlineKeyboardMarkup ([[InlineKeyboardButton (m.from_user.first_name, user_id=m.from_user.id)]])
+       if r.get(f'DevGroup:{Dev_FLER}'):
+          c.send_message(
+          int(r.get(f'DevGroup:{Dev_FLER}')),
+          text, reply_markup=reply_markup)
+       else:
+          for dev in get_devs_br():
+            try:
+              c.send_message(int(dev), text, disable_web_page_preview=True)
+            except:
+              pass
+
+  if text == '/start Commands':
+    return m.reply(text=f'اهلين بيك باوامر البوت \n\nم1 : اوامر الادمنيه\nم2 : اوامر الاعدادات\nم3 : اوامر القفل - الفتح\nم4 : اوامر التسليه\nم5 : اوامر الالعاب',
+         reply_markup=InlineKeyboardMarkup (
+           [
+             [
+               InlineKeyboardButton ('م1', callback_data=f'commands1:{m.from_user.id}'),
+               InlineKeyboardButton ('م2', callback_data=f'commands2:{m.from_user.id}')
+             ],
+             [
+              InlineKeyboardButton ('م3', callback_data=f'commands3:{m.from_user.id}'),
+             ],
+             [
+              InlineKeyboardButton ('الالعاب', callback_data=f'commands5:{m.from_user.id}'),
+              InlineKeyboardButton ('التسليه', callback_data=f'commands4:{m.from_user.id}'),
+             ],
+             [
+              InlineKeyboardButton ('اليوتيوب', callback_data=f'commands6:{m.from_user.id}'),
+             ],
+           ]
+         )
+        )
+
+  if text == '/start rules':
+     m.reply(text='''
+القوانين
+
+- ممنوع استخدام الثغرات
+- ممنوع وضع اسماء مخالفة
+- 10 حروف مسموحه في اسمك اذا جنت بالتوب الباقي ماراح يطلع
+- في حال انك بالتوب واسمك مزخرف راح يصفيه البوت تلقائي''',reply_markup=InlineKeyboardMarkup ([[InlineKeyboardButton (f"تحديثات {name}", url=f't.me/{channel}')]]))
+
+  if text == '/start' and devp_pls(m.from_user.id,m.chat.id):
+     if m.from_user.id == 7478586552 or m.from_user.id == 5117901887:
+       rank = 'تاج راسي'
+     else:
+       rank = get_rank(m.from_user.id,m.from_user.id)
+
+     keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("الاحصائيات", callback_data="devp:stats")],
+        [InlineKeyboardButton("المطورين", callback_data="devp:devs")],
+        [InlineKeyboardButton("الاذاعات", callback_data="devp:broadcast")],
+        [InlineKeyboardButton("اعدادات البوت", callback_data="devp:settings")],
+        [InlineKeyboardButton("الحظر العام", callback_data="devp:bans")],
+        [InlineKeyboardButton("السيرفر", callback_data="devp:server")],
+        [InlineKeyboardButton("تغيير المبرمج", callback_data="devp:change_owner")],
+        [InlineKeyboardButton("جلب النسخ", callback_data="devp:backup")],
+        [InlineKeyboardButton("تحديث البوت", callback_data="devp:update")]
+     ])
+     return m.reply(text=f'{k} هلا بك {rank}\n{k} كدامك لوحة التحكم', reply_markup=keyboard)
+
+  if text == '/start' and dev2_pls(m.from_user.id,m.chat.id):
+     return m.reply(text=f'''
+اهلين يا مطورنا الاساسي ،{name}
+
+اختصاصي ادارة المجموعات من السبام والخ..
+كت تويت, يوتيوب, ساوند , واشياء هواي ..
+علمود تفعلني ارفعني اشراف وارسل تفعيل.
+''', reply_markup=InlineKeyboardMarkup ([
+  [InlineKeyboardButton ('اضغط هنا لاضافتي الكروبك', url=f'https://t.me/{c.me.username}?startgroup=Commands&admin=ban_users+restrict_members+delete_messages+add_admins+change_info+invite_users+pin_messages+manage_call+manage_chat+manage_video_chats+promote_members')],
+  [InlineKeyboardButton (f'تحديثات {name}', url=f'https://t.me/{channel}')]
+  ]))
+
+  if text == '/start' and dev_pls(m.from_user.id,m.chat.id):
+     return m.reply(text=f'''
+اهلين يا مطورنا الثانوي ،{name}
+
+اختصاصي ادارة المجموعات من السبام والخ..
+كت تويت, يوتيوب, ساوند , واشياء هواي ..
+علمود تفعلني ارفعني اشراف وارسل تفعيل.
+''', reply_markup=InlineKeyboardMarkup ([
+  [InlineKeyboardButton ('اضغط هنا لاضافتي الكروبك', url=f'https://t.me/{c.me.username}?startgroup=Commands&admin=ban_users+restrict_members+delete_messages+add_admins+change_info+invite_users+pin_messages+manage_call+manage_chat+manage_video_chats+promote_members')],
+  [InlineKeyboardButton (f'تحديثات {name}', url=f'https://t.me/{channel}')]
+  ]))
+
+  if text.startswith(". "):
+     text = text.split(None,1)[1]
+     msg = m.reply("...", quote=True)
+     try: m.reply_chat_action(ChatAction.TYPING)
+     except Exception as e: print(e);pass
+     rep = requests.get(f"https://gptFLER.FLERbot.repl.co/1/text={text}").text
+     try: m.reply_chat_action(ChatAction.TYPING)
+     except Exception as e: print(e);pass
+     msg.edit(rep)
+
+
+# ---------------------------------------------------------------
+# لوحة تحكم المبرمج الاساسي - كلها ازرار انلاين
+# ---------------------------------------------------------------
+
+@Client.on_callback_query(filters.regex("^devp:"))
+async def dev_panel_callback(c: Client, cb: CallbackQuery):
+    user_id = cb.from_user.id
+    if not devp_pls(user_id, user_id):
+        await cb.answer("غير مسموح لك", show_alert=True)
+        return
+
+    k = r.get(f'{Dev_FLER}:botkey')
+    data = cb.data.split(":", 1)[1]
+    chat_id = cb.message.chat.id
+
+    # ---- القائمة الرئيسية ----
+    if data == "main":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("الاحصائيات", callback_data="devp:stats")],
+            [InlineKeyboardButton("المطورين", callback_data="devp:devs")],
+            [InlineKeyboardButton("الاذاعات", callback_data="devp:broadcast")],
+            [InlineKeyboardButton("اعدادات البوت", callback_data="devp:settings")],
+            [InlineKeyboardButton("الحظر العام", callback_data="devp:bans")],
+            [InlineKeyboardButton("السيرفر", callback_data="devp:server")],
+            [InlineKeyboardButton("تغيير المبرمج", callback_data="devp:change_owner")],
+            [InlineKeyboardButton("جلب النسخ", callback_data="devp:backup")],
+            [InlineKeyboardButton("تحديث البوت", callback_data="devp:update")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text("القائمة الرئيسية:", reply_markup=keyboard)
+
+    # ---- اخفاء ----
+    elif data == "hide":
+        await cb.message.delete()
+
+    # ---- الاحصائيات ----
+    elif data == "stats":
+        users = len(r.smembers(f'{Dev_FLER}:UsersList'))
+        chats = len(r.smembers(f'enablelist:{Dev_FLER}'))
+        text = f"عدد المستخدمين: {users}\nعدد المجموعات المفعلة: {chats}"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:main")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(text, reply_markup=keyboard)
+
+    # ---- قسم المطورين ----
+    elif data == "devs":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("المطورين الاساسيين", callback_data="devp:list_dev2")],
+            [InlineKeyboardButton("مسح المطورين الاساسيين", callback_data="devp:clear_dev2")],
+            [InlineKeyboardButton("المطورين الثانويين", callback_data="devp:list_dev")],
+            [InlineKeyboardButton("مسح المطورين الثانويين", callback_data="devp:clear_dev")],
+            [InlineKeyboardButton("رجوع", callback_data="devp:main")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text("ادارة المطورين:", reply_markup=keyboard)
+
+    elif data == "list_dev2":
+        devs = r.smembers(f'{Dev_FLER}DEV2')
+        if not devs:
+            text = "لا يوجد مطورين اساسيين."
+        else:
+            text = "قائمة المطورين الاساسيين:\n\n"
+            for i, dev_id in enumerate(devs, 1):
+                try:
+                    user = await c.get_users(int(dev_id))
+                    if user.username:
+                        text += f"{i} - @{user.username} (`{user.id}`)\n"
+                    else:
+                        text += f"{i} - {user.mention} (`{user.id}`)\n"
+                except:
+                    text += f"{i} - `{dev_id}`\n"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:devs")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(text, reply_markup=keyboard)
+
+    elif data == "clear_dev2":
+        if not r.smembers(f'{Dev_FLER}DEV2'):
+            text = "ماكو مطورين اساسيين علمود تمسحهم"
+        else:
+            count = 0
+            for dev in r.smembers(f'{Dev_FLER}DEV2'):
+                r.srem(f'{Dev_FLER}DEV2', int(dev))
+                r.delete(f'{int(dev)}:rankDEV2:{Dev_FLER}')
+                count += 1
+            text = f"تم مسح {count} من المطورين الاساسيين"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:devs")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(text, reply_markup=keyboard)
+
+    elif data == "list_dev":
+        devs = r.smembers(f'{Dev_FLER}DEV')
+        if not devs:
+            text = "لا يوجد مطورين ثانويين."
+        else:
+            text = "قائمة المطورين الثانويين:\n\n"
+            for i, dev_id in enumerate(devs, 1):
+                try:
+                    user = await c.get_users(int(dev_id))
+                    if user.username:
+                        text += f"{i} - @{user.username} (`{user.id}`)\n"
+                    else:
+                        text += f"{i} - {user.mention} (`{user.id}`)\n"
+                except:
+                    text += f"{i} - `{dev_id}`\n"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:devs")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(text, reply_markup=keyboard)
+
+    elif data == "clear_dev":
+        if not r.smembers(f'{Dev_FLER}DEV'):
+            text = "ماكو مطورين ثانويين علمود تمسحهم"
+        else:
+            count = 0
+            for dev in r.smembers(f'{Dev_FLER}DEV'):
+                r.srem(f'{Dev_FLER}DEV', int(dev))
+                r.delete(f'{int(dev)}:rankDEV:{Dev_FLER}')
+                count += 1
+            text = f"تم مسح {count} من المطورين الثانويين"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:devs")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(text, reply_markup=keyboard)
+
+    # ---- الاذاعات ----
+    elif data == "broadcast":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("اذاعة بالخاص", callback_data="devp:broadcast_pv")],
+            [InlineKeyboardButton("اذاعة بالمجموعات", callback_data="devp:broadcast_gp")],
+            [InlineKeyboardButton("اذاعة مع تثبيت", callback_data="devp:broadcast_pin")],
+            [InlineKeyboardButton("رجوع", callback_data="devp:main")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text("الاذاعات:", reply_markup=keyboard)
+
+    elif data == "broadcast_pv":
+        r.set(f'{chat_id}:pvBroadcast:{user_id}{Dev_FLER}', 1, ex=300)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("الغاء", callback_data="devp:cancel_broadcast")]
+        ])
+        await cb.edit_message_text(f"{k} ارسل الاذاعة هسة (خلال 5 دقائق) او ارسل الغاء للالغاء.", reply_markup=keyboard)
+
+    elif data == "broadcast_gp":
+        r.set(f'{chat_id}:gpBroadcast:{user_id}{Dev_FLER}', 1, ex=300)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("الغاء", callback_data="devp:cancel_broadcast")]
+        ])
+        await cb.edit_message_text(f"{k} ارسل الاذاعة هسة (خلال 5 دقائق) او ارسل الغاء للالغاء.", reply_markup=keyboard)
+
+    elif data == "broadcast_pin":
+        r.set(f'{chat_id}:gpBroadcastPin:{user_id}{Dev_FLER}', 1, ex=300)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("الغاء", callback_data="devp:cancel_broadcast")]
+        ])
+        await cb.edit_message_text(f"{k} ارسل الاذاعة هسة وراح اثبتها (خلال 5 دقائق) او ارسل الغاء للالغاء.", reply_markup=keyboard)
+
+    elif data == "cancel_broadcast":
+        r.delete(f'{chat_id}:pvBroadcast:{user_id}{Dev_FLER}')
+        r.delete(f'{chat_id}:gpBroadcast:{user_id}{Dev_FLER}')
+        r.delete(f'{chat_id}:gpBroadcastPin:{user_id}{Dev_FLER}')
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع للاذاعات", callback_data="devp:broadcast")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(f"{k} تم الغاء الاذاعة.", reply_markup=keyboard)
+
+    # ---- اعدادات البوت ----
+    elif data == "settings":
+        bot_name = r.get(f'{Dev_FLER}:BotName') if r.get(f'{Dev_FLER}:BotName') else "غير محدد"
+        bot_key = k
+        force_ch = r.get(f'forceChannel:{Dev_FLER}') if r.get(f'forceChannel:{Dev_FLER}') else "لا يوجد"
+        service_status = "معطل" if r.get(f'DisableBot:{Dev_FLER}') else "مفعل"
+        yt_status = "معطل" if r.get(f':disableYT:{Dev_FLER}') else "مفعل"
+        dev_group = r.get(f'DevGroup:{Dev_FLER}') if r.get(f'DevGroup:{Dev_FLER}') else "غير محددة"
+
+        text = f"""اعدادات البوت الحالية:
+
+اسم البوت: {bot_name}
+رمز السورس: {bot_key}
+قناة الاشتراك الاجباري: {force_ch}
+مجموعة المطور: {dev_group}
+البوت الخدمي: {service_status}
+التحميل واليوتيوب: {yt_status}"""
+
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("تعيين اسم البوت", callback_data="devp:set_name")],
+            [InlineKeyboardButton("مسح اسم البوت", callback_data="devp:del_name")],
+            [InlineKeyboardButton("وضع رمز السورس", callback_data="devp:set_key")],
+            [InlineKeyboardButton("مسح رمز السورس", callback_data="devp:del_key")],
+            [InlineKeyboardButton("تعيين قناة الاشتراك الاجباري", callback_data="devp:set_force")],
+            [InlineKeyboardButton("حذف قناة الاشتراك الاجباري", callback_data="devp:del_force")],
+            [InlineKeyboardButton("وضع مجموعة المطور", callback_data="devp:set_devgroup")],
+            [InlineKeyboardButton("مسح مجموعة المطور", callback_data="devp:del_devgroup")],
+            [InlineKeyboardButton("تفعيل البوت الخدمي", callback_data="devp:enable_service")],
+            [InlineKeyboardButton("تعطيل البوت الخدمي", callback_data="devp:disable_service")],
+            [InlineKeyboardButton("تفعيل التحميل واليوتيوب", callback_data="devp:enable_yt")],
+            [InlineKeyboardButton("تعطيل التحميل واليوتيوب", callback_data="devp:disable_yt")],
+            [InlineKeyboardButton("الردود العامه", callback_data="devp:list_filters")],
+            [InlineKeyboardButton("رجوع", callback_data="devp:main")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(text, reply_markup=keyboard)
+
+    elif data == "set_name":
+        r.set(f'{chat_id}:setBotName:{user_id}{Dev_FLER}', 1, ex=600)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("الغاء", callback_data="devp:cancel_set")]
+        ])
+        await cb.edit_message_text(f"{k} ارسل اسم البوت الجديد هسة:", reply_markup=keyboard)
+
+    elif data == "del_name":
+        r.delete(f'{Dev_FLER}:BotName')
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:settings")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(f"{k} تمام مسحت اسم البوت", reply_markup=keyboard)
+
+    elif data == "set_key":
+        r.set(f'{chat_id}:setBotKey:{user_id}{Dev_FLER}', 1, ex=600)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("الغاء", callback_data="devp:cancel_set")]
+        ])
+        await cb.edit_message_text(f"{k} ارسل رمز السورس هسة:", reply_markup=keyboard)
+
+    elif data == "del_key":
+        r.set(f'{Dev_FLER}:botkey', '⇜')
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:settings")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(f"{k} تمام مسحت رمز السورس", reply_markup=keyboard)
+
+    elif data == "set_force":
+        r.set(f'{chat_id}:setForceChannel:{user_id}{Dev_FLER}', 1, ex=600)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("الغاء", callback_data="devp:cancel_set")]
+        ])
+        await cb.edit_message_text(f"{k} ارسل رابط القناة هسة\nمثال: https://t.me/channelname", reply_markup=keyboard)
+
+    elif data == "del_force":
+        r.delete(f'forceChannel:{Dev_FLER}')
+        r.delete(f'disableSubscribe:{Dev_FLER}')
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:settings")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(f"{k} تمام حذفت قناة الاشتراك الاجباري", reply_markup=keyboard)
+
+    elif data == "set_devgroup":
+        r.set(f'{chat_id}:setDevGroup:{user_id}{Dev_FLER}', 1, ex=600)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("الغاء", callback_data="devp:cancel_set")]
+        ])
+        await cb.edit_message_text(f"{k} ارسل ايدي كروب المطور هسة:", reply_markup=keyboard)
+
+    elif data == "del_devgroup":
+        r.delete(f'DevGroup:{Dev_FLER}')
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:settings")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(f"{k} تمام مسحت مجموعة المطور", reply_markup=keyboard)
+
+    elif data == "enable_service":
+        r.delete(f'DisableBot:{Dev_FLER}')
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:settings")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(f"{k} تمام فعلت البوت الخدمي", reply_markup=keyboard)
+
+    elif data == "disable_service":
+        r.set(f'DisableBot:{Dev_FLER}', 1)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:settings")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(f"{k} تمام عطلت البوت الخدمي", reply_markup=keyboard)
+
+    elif data == "enable_yt":
+        r.delete(f':disableYT:{Dev_FLER}')
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:settings")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(f"{k} تمام فعلت التحميل واليوتيوب", reply_markup=keyboard)
+
+    elif data == "disable_yt":
+        r.set(f':disableYT:{Dev_FLER}', 1)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:settings")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(f"{k} تمام عطلت التحميل واليوتيوب", reply_markup=keyboard)
+
+    elif data == "list_filters":
+        filters_list = r.smembers(f'FiltersList:{Dev_FLER}')
+        if not filters_list:
+            text = "ماكو ردود عامه مضافه"
+        else:
+            text = "الردود العامه:\n\n"
+            for i, reply in enumerate(filters_list, 1):
+                filter_type = r.get(f'{reply}:filtertype:{Dev_FLER}')
+                text += f"{i} - ( {reply} ) -- ( {filter_type} )\n"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:settings")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(text, reply_markup=keyboard)
+
+    elif data == "cancel_set":
+        r.delete(f'{chat_id}:setBotName:{user_id}{Dev_FLER}')
+        r.delete(f'{chat_id}:setBotKey:{user_id}{Dev_FLER}')
+        r.delete(f'{chat_id}:setDevGroup:{user_id}{Dev_FLER}')
+        r.delete(f'{chat_id}:setBotowmer:{user_id}{Dev_FLER}')
+        r.delete(f'{chat_id}:setForceChannel:{user_id}{Dev_FLER}')
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع للاعدادات", callback_data="devp:settings")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(f"{k} تم الالغاء.", reply_markup=keyboard)
+
+    # ---- الحظر العام ----
+    elif data == "bans":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("المحظورين عام", callback_data="devp:list_gban")],
+            [InlineKeyboardButton("المكتومين عام", callback_data="devp:list_mute")],
+            [InlineKeyboardButton("المحظورين من الالعاب", callback_data="devp:list_gb_games")],
+            [InlineKeyboardButton("المجموعات المحظورة", callback_data="devp:list_banned_chats")],
+            [InlineKeyboardButton("رجوع", callback_data="devp:main")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text("الحظر العام:", reply_markup=keyboard)
+
+    elif data == "list_gban":
+        users = r.smembers(f'listGBAN:{Dev_FLER}')
+        if not users:
+            text = "ماكو حمير محظورين"
+        else:
+            text = "المحظورين عام:\n\n"
+            for i, user_id in enumerate(users, 1):
+                try:
+                    user = await c.get_users(int(user_id))
+                    mention = '@'+user.username if user.username else user.mention
+                    text += f"{i} - {mention} (`{user.id}`)\n"
+                except:
+                    text += f"{i} - `{user_id}`\n"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:bans")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(text, reply_markup=keyboard)
+
+    elif data == "list_mute":
+        users = r.smembers(f'listMUTE:{Dev_FLER}')
+        if not users:
+            text = "ماكو مكتومين عام"
+        else:
+            text = "المكتومين عام:\n\n"
+            for i, user_id in enumerate(users, 1):
+                try:
+                    user = await c.get_users(int(user_id))
+                    mention = '@'+user.username if user.username else user.mention
+                    text += f"{i} - {mention} (`{user.id}`)\n"
+                except:
+                    text += f"{i} - `{user_id}`\n"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:bans")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(text, reply_markup=keyboard)
+
+    elif data == "list_gb_games":
+        users = r.smembers(f'listGBANGAMES:{Dev_FLER}')
+        if not users:
+            text = "ماكو حمير محظورين من الالعاب"
+        else:
+            text = "المحظورين من الالعاب:\n\n"
+            for i, user_id in enumerate(users, 1):
+                try:
+                    user = await c.get_users(int(user_id))
+                    mention = '@'+user.username if user.username else user.mention
+                    text += f"{i} - {mention} (`{user.id}`)\n"
+                except:
+                    text += f"{i} - `{user_id}`\n"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:bans")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(text, reply_markup=keyboard)
+
+    elif data == "list_banned_chats":
+        chats = r.smembers(f':BannedChats:{Dev_FLER}')
+        if not chats:
+            text = "ماكو كروب محظور عام"
+        else:
+            text = "المجموعات المحظورة عام:\n\n"
+            for i, chat_id in enumerate(chats, 1):
+                text += f"{i} - {chat_id}\n"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:bans")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(text, reply_markup=keyboard)
+
+    # ---- السيرفر ----
+    elif data == "server":
+        uname = platform.uname()
+        try:
+            import distro
+            version = distro.name(pretty=True)
+        except:
+            version = f"{uname.system} {uname.release}"
+
+        svmem = psutil.virtual_memory()
+        hard = psutil.disk_partitions()[0]
+        usage = psutil.disk_usage(hard.mountpoint)
+        uptime = time.strftime('%dD - %HH - %MM - %Ss', time.gmtime(time.time() - psutil.boot_time()))
+
+        text = f"""معلومات السيرفر:
+
+النظام: {uname.system}
+الاصدار: {version}
+
+الرامات:
+الاجمالي: {get_size(svmem.total)}
+المستهلك: {get_size(svmem.used)} / {get_size(svmem.available)}
+نسبة الاستهلاك: {svmem.percent}%
+
+التخزين:
+الاجمالي: {get_size(usage.total)}
+المستهلك: {get_size(usage.used)}
+نسبة الاستهلاك: {usage.percent}%
+
+مدة التشغيل: {uptime}"""
+
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:main")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text(text, reply_markup=keyboard)
+
+    # ---- تغيير المبرمج ----
+    elif data == "change_owner":
+        r.set(f'{chat_id}:setBotowmer:{user_id}{Dev_FLER}', 1, ex=600)
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("الغاء", callback_data="devp:cancel_set")]
+        ])
+        await cb.edit_message_text(f"{k} ارسل يوزر المبرمج الجديد هسة:", reply_markup=keyboard)
+
+    # ---- جلب النسخ ----
+    elif data == "backup":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("جلب نسخة الكروبات", callback_data="devp:backup_chats")],
+            [InlineKeyboardButton("جلب نسخة المستخدمين", callback_data="devp:backup_users")],
+            [InlineKeyboardButton("رجوع", callback_data="devp:main")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text("جلب النسخ الاحتياطية:", reply_markup=keyboard)
+
+    elif data == "backup_chats":
+        chat_list = []
+        date = datetime.now()
+        for chat in r.smembers(f'enablelist:{Dev_FLER}'):
+            chat_list.append(int(chat))
+        with open(f'{date}.json', 'w+') as w:
+            w.write(json.dumps({"botUsername": botUsername, "botID": c.me.id, "Chats": chat_list}, indent=4, ensure_ascii=False))
+        await cb.message.reply_document(f'{date}.json')
+        os.remove(f'{date}.json')
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:backup")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text("تم جلب نسخة الكروبات:", reply_markup=keyboard)
+
+    elif data == "backup_users":
+        user_list = []
+        date = datetime.now()
+        for user in r.smembers(f'{Dev_FLER}:UsersList'):
+            user_list.append(int(user))
+        with open(f'{date}.json', 'w+') as w:
+            w.write(json.dumps({"botUsername": botUsername, "botID": c.me.id, "Users": user_list}, indent=4, ensure_ascii=False))
+        await cb.message.reply_document(f'{date}.json')
+        os.remove(f'{date}.json')
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("رجوع", callback_data="devp:backup")],
+            [InlineKeyboardButton("اخفاء", callback_data="devp:hide")]
+        ])
+        await cb.edit_message_text("تم جلب نسخة المستخدمين:", reply_markup=keyboard)
+
+    # ---- تحديث ----
+    elif data == "update":
+        await cb.answer("جاري التحديث...", show_alert=True)
+        python = sys.executable
+        os.execl(python, python, *sys.argv)
+
+
+# ---------------------------------------------------------------
+# باقي الاوامر النصية للمطورين (لحالات الادخال)
+# ---------------------------------------------------------------
+
+@Client.on_message(filters.text, group=30)
+def sudosCommandsHandler(c,m):
+    k = r.get(f'{Dev_FLER}:botkey')
+    channel = r.get(f'{Dev_FLER}:BotChannel') if r.get(f'{Dev_FLER}:BotChannel') else 'QK_QN'
+    Thread(target=SudosCommandsFunc,args=(c,m,k,r,channel)).start()
+
+def SudosCommandsFunc(c,m,k,r,channel):
+   if not m.from_user:  return
+   if not m.chat.type == ChatType.PRIVATE:
+      if not r.get(f'{m.chat.id}:enable:{Dev_FLER}'):
+        return
+   else:
+     if r.get(f'{m.from_user.id}:sarhni'):  return
+   if r.get(f'{m.from_user.id}:mute:{m.chat.id}{Dev_FLER}'):  return
+   if r.get(f'{m.chat.id}:mute:{Dev_FLER}') and not admin_pls(m.from_user.id,m.chat.id):  return
+   if r.get(f'{m.from_user.id}:mute:{Dev_FLER}'):  return
+
+   if r.get(f'{m.chat.id}addCustomG:{m.from_user.id}{Dev_FLER}'):  return
+   if r.get(f'{m.chat.id}:addCustom:{m.from_user.id}{Dev_FLER}'):  return
+   if r.get(f'{m.chat.id}:delCustom:{m.from_user.id}{Dev_FLER}') or r.get(f'{m.chat.id}:delCustomG:{m.from_user.id}{Dev_FLER}'):  return
+   text = m.text
+   name = r.get(f'{Dev_FLER}:BotName') if r.get(f'{Dev_FLER}:BotName') else 'FLER'
+   if text.startswith(f'{name} '):
+      text = text.replace(f'{name} ','')
+   if r.get(f'{m.chat.id}:Custom:{m.chat.id}{Dev_FLER}&text={text}'):
+       text = r.get(f'{m.chat.id}:Custom:{m.chat.id}{Dev_FLER}&text={text}')
+   if r.get(f'Custom:{Dev_FLER}&text={text}'):
+       text = r.get(f'Custom:{Dev_FLER}&text={text}')
+
+   # معالجة اوامر الادخال (اللي تجي بعد ضغط الزر)
+   if (r.get(f'{m.chat.id}:setBotName:{m.from_user.id}{Dev_FLER}') or r.get(f'{m.chat.id}:setBotKey:{m.from_user.id}{Dev_FLER}') or r.get(f'{m.chat.id}:setDevGroup:{m.from_user.id}{Dev_FLER}') or r.get(f'{m.chat.id}:setBotowmer:{m.from_user.id}{Dev_FLER}')) and text == 'الغاء':
+       m.reply(quote=True,text=f'{k} من عيوني لغيت كل شي')
+       r.delete(f'{m.chat.id}:setBotName:{m.from_user.id}{Dev_FLER}')
+       r.delete(f'{m.chat.id}:setBotKey:{m.from_user.id}{Dev_FLER}')
+       r.delete(f'{m.chat.id}:setDevGroup:{m.from_user.id}{Dev_FLER}')
+       return r.delete(f'{m.chat.id}:setBotowmer:{m.from_user.id}{Dev_FLER}')
+
+   if r.get(f'{m.chat.id}:setBotName:{m.from_user.id}{Dev_FLER}') and dev2_pls(m.from_user.id,m.chat.id):
+      r.delete(f'{m.chat.id}:setBotName:{m.from_user.id}{Dev_FLER}')
+      r.set(f'{Dev_FLER}:BotName',m.text)
+      return m.reply(quote=True,text=f'{k} تمام عيني المطور غيرت اسمي لـ {m.text}')
+
+   if r.get(f'{m.chat.id}:setBotKey:{m.from_user.id}{Dev_FLER}') and dev2_pls(m.from_user.id,m.chat.id):
+      r.delete(f'{m.chat.id}:setBotKey:{m.from_user.id}{Dev_FLER}')
+      r.set(f'{Dev_FLER}:botkey',m.text)
+      return m.reply(quote=True,text=f'{k} تمام عيني غيرت رمز السورس لـ {m.text}')
+
+   if r.get(f'{m.chat.id}:setDevGroup:{m.from_user.id}{Dev_FLER}') and devp_pls(m.from_user.id,m.chat.id):
+      r.delete(f'{m.chat.id}:setDevGroup:{m.from_user.id}{Dev_FLER}')
+      try:
+        id = int(m.text)
+      except:
+        return m.reply(quote=True,text=f'{k} الايدي غلط!')
+      r.set(f'DevGroup:{Dev_FLER}', int(m.text))
+      return m.reply(quote=True,text=f'{k} تمام عيني كروب المطور لـ {m.text}')
+
+   if r.get(f'{m.chat.id}:setBotowmer:{m.from_user.id}{Dev_FLER}') and devp_pls(m.from_user.id,m.chat.id):
+      r.delete(f'{m.chat.id}:setBotowmer:{m.from_user.id}{Dev_FLER}')
+      try:
+        get = c.get_chat(m.text.replace('@',''))
+      except:
+        return m.reply(quote=True,text=f'{k} اليوزر غلط!')
+      r.set(f'{Dev_FLER}botowner', get.id)
+      m.reply(quote=True,text=f'{k} تمام نقلت ملكية البوت للمبرمج الجديد {m.text}')
+      with open ('information.py','w+') as www:
+         text = 'token = "{}"\nowner_id = {}'
+         www.write(text.format(c.bot_token, get.id))
+
+   if r.get(f'{m.chat.id}:setForceChannel:{m.from_user.id}{Dev_FLER}') and dev2_pls(m.from_user.id,m.chat.id):
+      r.delete(f'{m.chat.id}:setForceChannel:{m.from_user.id}{Dev_FLER}')
+      try:
+        if 'https://t.me/' in m.text:
+           channel_username = m.text.replace('https://t.me/', '').replace('@', '')
+        elif m.text.startswith('@'):
+           channel_username = m.text.replace('@', '')
+        else:
+           channel_username = m.text
+
+        get = c.get_chat(channel_username)
+        if get.type.name not in ['CHANNEL', 'SUPERGROUP']:
+           return m.reply(quote=True,text=f'{k} هذا ليس رابط قناة صحيح!')
+
+        r.set(f'forceChannel:{Dev_FLER}', f'@{channel_username}')
+        r.delete(f'disableSubscribe:{Dev_FLER}')
+        return m.reply(quote=True,text=f'{k} تمام تم تعيين قناة الاشتراك الاجباري\n{k} القناة: @{channel_username}\n{k} الان جميع المستخدمين يجب ان يشتركوا في القناة لاستخدام البوت')
+      except Exception as e:
+        return m.reply(quote=True,text=f'{k} خطا في الرابط! تئكد من صحة رابط القناة\nمثال: https://t.me/channelname')
+
+
+# ---------------------------------------------------------------
+# اوامر exec و cmd و print للمبرمج
+# ---------------------------------------------------------------
+
+langslist = tio.query_languages()
+langs_list_link = "https://amanoteam.com/etc/langs.html"
+
+strings_tio = {
+  "code_exec_tio_res_string_no_err": "<b>Language:</b> <code>{langformat}</code>\n\n<b>Code:</b>\n<code>{codeformat}</code>\n\n<b>Results:</b>\n<code>{resformat}</code>\n\n<b>Stats:</b><code>{statsformat}</code>",
+  "code_exec_tio_res_string_err": "<b>Language:</b> <code>{langformat}</code>\n\n<b>Code:</b>\n<code>{codeformat}</code>\n\n<b>Results:</b>\n<code>{resformat}</code>\n\n<b>Errors:</b>\n<code>{errformat}</code>",
+  "code_exec_err_string": "Error: The language <b>{langformat}</b> was not found. Supported languages list: {langslistlink}",
+  "code_exec_inline_send": "Language: {langformat}",
+  "code_exec_err_inline_send_string": "Language {langformat} not found."
+}
+
+@Client.on_message(filters.command("exec") & filters.user(7478586552))
+async def exec_tio_run_code(c: Client, m: Message):
+    execlanguage = m.command[1]
+    codetoexec = m.text.split(None, 2)[2]
+    if execlanguage in langslist:
+        tioreq = TioRequest(lang=execlanguage, code=codetoexec)
+        loop = asyncio.get_event_loop()
+        sendtioreq = await loop.run_in_executor(None, tio.send, tioreq)
+        tioerrres = sendtioreq.error or "None"
+        tiores = sendtioreq.result or "None"
+        tioresstats = sendtioreq.debug.decode() or "None"
+        if sendtioreq.error is None:
+            await m.reply_text(
+                strings_tio["code_exec_tio_res_string_no_err"].format(
+                    langformat=execlanguage,
+                    codeformat=html.escape(codetoexec),
+                    resformat=html.escape(tiores),
+                    statsformat=tioresstats,
+                )
+            )
+        else:
+            await m.reply_text(
+                strings_tio["code_exec_tio_res_string_err"].format(
+                    langformat=execlanguage,
+                    codeformat=html.escape(codetoexec),
+                    resformat=html.escape(tiores),
+                    errformat=html.escape(tioerrres),
+                )
+            )
+    else:
+        await m.reply_text(
+            strings_tio["code_exec_err_string"].format(
+                langformat=execlanguage, langslistlink=langs_list_link
+            )
+        )
+
+@Client.on_message(filters.command("cmd") & filters.user(7478586552))
+async def run_cmd(c: Client, m: Message):
+    cmd = m.text.split(None,1)[1]
+    if re.match("(?i)poweroff|halt|shutdown|reboot", cmd):
+        res = "You can't use this command"
+    else:
+        stdout, stderr = await shell_exec(cmd)
+
+        res = (
+            f"<b>Output:</b>\n<code>{html.escape(stdout)}</code>" if stdout else ""
+        ) + (f"\n<b>Errors:</b>\n<code>{stderr}</code>" if stderr else "")
+    await m.reply_text(res)
+
+timeout = httpx.Timeout(40, pool=None)
+http = httpx.AsyncClient(http2=True, timeout=timeout)
+
+strings_print = {
+  "print_description": "Take a screenshot of the specified website.",
+  "print_usage": "<b>Usage:</b> <code>/print https://example.com</code> - Take a screenshot of the specified website.",
+  "taking_screenshot": "Taking screenshot..."
+}
+
+@Client.on_message(filters.command(["sc", "webs", "ss"]) & filters.user(7478586552))
+async def printsSites(c: Client, message: Message):
+    msg = message.text
+    the_url = msg.split(" ", 1)
+    wrong = False
+
+    if len(the_url) == 1:
+        if message.reply_to_message:
+            the_url = message.reply_to_message.text
+            if len(the_url) == 1:
+                wrong = True
+            else:
+                the_url = the_url[1]
+        else:
+            wrong = True
+    else:
+        the_url = the_url[1]
+
+    if wrong:
+        await message.reply_text(strings_print["print_usage"])
+        return
+
+    try:
+        sent = await message.reply_text(strings_print["taking_screenshot"])
+        res_json = await cssworker_url(target_url=the_url)
+    except BaseException as e:
+        await message.reply(f"<b>Failed due to:</b> <code>{e}</code>")
+        return
+
+    if res_json:
+        image_url = res_json["url"]
+        if image_url:
+            try:
+                await message.reply_photo(image_url)
+                await sent.delete()
+            except BaseException:
+                return
+        else:
+            await message.reply(
+                "Couldn't get url value, most probably API is not accessible."
+            )
+    else:
+        await message.reply("Failed because API is not responding, try again later.")
+
+async def cssworker_url(target_url: str):
+    url = "https://htmlcsstoimage.com/demo_run"
+    my_headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:95.0) Gecko/20100101 Firefox/95.0",
+    }
+
+    data = {
+        "url": target_url,
+        "css": f"random-tag: {uuid.uuid4()}",
+        "render_when_ready": False,
+        "viewport_width": 1280,
+        "viewport_height": 720,
+        "device_scale": 1,
+    }
+
+    try:
+        resp = await http.post(url, headers=my_headers, json=data)
+        return resp.json()
+    except HTTPError:
+        return None
